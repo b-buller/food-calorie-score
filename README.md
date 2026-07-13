@@ -4,6 +4,12 @@
 
 A tiny, mobile-first calculator that turns any food label into one comparable number: dollars per 2,000 calories. Spin the wheels — servings, calories per serving, price — and the score updates instantly.
 
+**Live demo: [foodprice.i12.site](https://foodprice.i12.site/)**
+
+<p align="center">
+  <img src="screenshot.png" alt="Food Score — wheel pickers for servings, calories, and price with a color-coded cost bar" width="390">
+</p>
+
 ## Why
 
 Price tags tell you cost per package. Labels tell you calories per serving. Neither tells you what actually matters when comparing foods as fuel: **cost per calorie**. Normalizing to 2,000 calories (a typical daily intake) gives every food a common denominator:
