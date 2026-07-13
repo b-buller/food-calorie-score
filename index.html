@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f2f7">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Food Score — $ per 2,000 cal</title>
+<style>
+  :root {
+    --row-h: 2.5rem;
+    --bg: #f2f2f7; --card: #ffffff; --text: #1c1c1e; --muted: #8e8e93;
+    --pill: rgba(120,120,128,.12); --accent: #007aff;
+    --green: #34c759; --orange: #ff9500; --red: #ff3b30;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000; --card: #1c1c1e; --text: #ffffff; --muted: #98989f;
+      --pill: rgba(120,120,128,.24); --accent: #0a84ff;
+    }
+  }
+  @media (max-height: 640px) { :root { --row-h: 2.1rem; } }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden; overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  main {
+    max-width: 430px; height: 100%; margin: 0 auto;
+    padding: calc(env(safe-area-inset-top) + 1.5rem) 1rem calc(env(safe-area-inset-bottom) + 1rem);
+    display: flex; flex-direction: column; justify-content: center; gap: 1.5rem;
+    overflow-y: auto;
+  }
+
+  /* ---------- result ---------- */
+  .result { text-align: center; }
+  #cost {
+    font-size: clamp(3rem, 18vw, 4.5rem); font-weight: 700; line-height: 1.05;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+    transition: color .15s ease;
+  }
+  #cost.long { font-size: clamp(2.2rem, 13vw, 3.4rem); }
+  main[data-zone="green"]  #cost, main[data-zone="green"]  .thumb { color: var(--green); }
+  main[data-zone="orange"] #cost, main[data-zone="orange"] .thumb { color: var(--orange); }
+  main[data-zone="red"]    #cost, main[data-zone="red"]    .thumb { color: var(--red); }
+  .sub { color: var(--muted); font-size: .85rem; margin-top: .3rem; font-variant-numeric: tabular-nums; }
+
+  /* ---------- bar ---------- */
+  .bar { margin-top: 1.1rem; padding: 0 .25rem; }
+  .track {
+    position: relative; height: .7rem; border-radius: 999px;
+    background: linear-gradient(90deg,
+      var(--green) 0%, var(--green) 20%, var(--orange) 30%,
+      var(--orange) 74%, var(--red) 86%, var(--red) 100%);
+  }
+  .cover {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 100%;
+    background: var(--bg); opacity: .82;
+    border-radius: 0 999px 999px 0;
+    transition: width .12s ease-out;
+  }
+  .thumb {
+    position: absolute; top: -4px; bottom: -4px; left: 0; width: 5px;
+    border-radius: 3px; background: currentColor; color: var(--muted);
+    box-shadow: 0 0 0 2px var(--bg);
+    transform: translateX(-50%);
+    transition: left .12s ease-out, color .15s ease;
+  }
+  .ticks { position: relative; height: 1rem; margin-top: .35rem; font-size: .65rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ticks span { position: absolute; top: 0; transform: translateX(-50%); }
+  .ticks .t0   { left: 0; transform: none; }
+  .ticks .t250 { left: 25%; }
+  .ticks .t800 { left: 80%; }
+  .ticks .tmax { right: 0; transform: none; }
+
+  /* ---------- pickers ---------- */
+  .pickers {
+    background: var(--card); border-radius: 1.25rem;
+    padding: 1rem .6rem 1.1rem;
+    display: grid; grid-template-columns: 1fr 1.15fr 1.75fr; gap: .3rem;
+  }
+  .col label {
+    display: block; text-align: center; margin-bottom: .6rem;
+    font-size: .65rem; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .pricerow { display: flex; align-items: center; }
+  .pricerow .wheelbox { flex: 1; min-width: 0; }
+  .sym { color: var(--muted); font-weight: 600; font-size: 1.1rem; padding: 0 .05rem; }
+
+  .wheelbox { position: relative; }
+  .pill {
+    position: absolute; left: 1px; right: 1px; top: 50%; height: var(--row-h);
+    transform: translateY(-50%); background: var(--pill);
+    border-radius: .6rem; pointer-events: none;
+  }
+  .wheel {
+    position: relative; height: calc(var(--row-h) * 5);
+    overflow-y: scroll; scroll-snap-type: y mandatory;
+    padding: calc(var(--row-h) * 2) 0;
+    scrollbar-width: none; overscroll-behavior: contain; touch-action: pan-y;
+    -webkit-mask-image: linear-gradient(transparent, #000 28%, #000 72%, transparent);
+    mask-image: linear-gradient(transparent, #000 28%, #000 72%, transparent);
+  }
+  .wheel::-webkit-scrollbar { display: none; }
+  .item {
+    height: var(--row-h); display: flex; align-items: center; justify-content: center;
+    scroll-snap-align: center;
+    font-size: 1.3rem; color: var(--muted); font-variant-numeric: tabular-nums;
+    cursor: pointer; user-select: none; -webkit-user-select: none;
+  }
+  .item.sel { color: var(--text); font-weight: 600; }
+
+  .editor {
+    position: absolute; left: 2px; right: 2px; top: 50%; height: var(--row-h);
+    transform: translateY(-50%); z-index: 2;
+    text-align: center; font: inherit; font-size: 1.3rem; font-weight: 600;
+    font-variant-numeric: tabular-nums; color: var(--text);
+    background: var(--card); border: 2px solid var(--accent);
+    border-radius: .6rem; outline: none; width: auto; min-width: 0; padding: 0;
+  }
+</style>
+</head>
+<body>
+<main id="app" data-zone="orange">
+  <header class="result">
+    <div id="cost">$—</div>
+    <div class="sub" id="sub">per 2,000 cal</div>
+    <div class="bar">
+      <div class="track">
+        <div class="cover" id="cover"></div>
+        <div class="thumb" id="thumb"></div>
+      </div>
+      <div class="ticks">
+        <span class="t0">$0</span><span class="t250">$2.50</span><span class="t800">$8</span><span class="tmax">$10+</span>
+      </div>
+    </div>
+  </header>
+
+  <section class="pickers">
+    <div class="col">
+      <label>Servings</label>
+      <div class="wheelbox"><div class="pill"></div><div class="wheel" id="w-serv"></div></div>
+    </div>
+    <div class="col">
+      <label>Calories</label>
+      <div class="wheelbox"><div class="pill"></div><div class="wheel" id="w-cal"></div></div>
+    </div>
+    <div class="col">
+      <label>Price</label>
+      <div class="pricerow">
+        <span class="sym">$</span>
+        <div class="wheelbox"><div class="pill"></div><div class="wheel" id="w-dol"></div></div>
+        <span class="sym">.</span>
+        <div class="wheelbox"><div class="pill"></div><div class="wheel" id="w-cen"></div></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+let touched = false;
+addEventListener("pointerdown", () => { touched = true; }, { once: true });
+
+/* ---------- math ---------- */
+function costPer2000(servings, calories, dollars, cents) {
+  const totalCal = servings * calories;
+  if (!(totalCal > 0)) return null;
+  return 2000 / totalCal * (dollars + cents / 100);
+}
+
+/* ---------- wheel ---------- */
+// ponytail: native CSS scroll-snap does momentum/snap; JS only reads position.
+function buildWheel(el, opts) {
+  const values = [];
+  for (let v = opts.min; v <= opts.max; v += opts.step) values.push(v);
+  const n = values.length;
+  const copies = opts.loop ? 5 : 1; // ponytail: 5 copies + recenter-on-settle beats virtual windowing for 100 rows
+  const total = n * copies;
+  const fmt = opts.format || String;
+
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < total; i++) {
+    const d = document.createElement("div");
+    d.className = "item";
+    d.textContent = fmt(values[i % n]);
+    frag.appendChild(d);
+  }
+  el.appendChild(frag);
+  const items = el.children;
+  const rowH = items[0].offsetHeight;
+
+  let curIdx = -1;
+  let editor = null;
+
+  const idxFromScroll = () =>
+    Math.max(0, Math.min(total - 1, Math.round(el.scrollTop / rowH)));
+  const valueAt = i => values[i % n];
+  const get = () => valueAt(curIdx >= 0 ? curIdx : idxFromScroll());
+
+  function markSel(i, silent) {
+    if (i === curIdx) return;
+    if (curIdx >= 0) items[curIdx].classList.remove("sel");
+    items[i].classList.add("sel");
+    curIdx = i;
+    if (!silent) {
+      if (touched) navigator.vibrate?.(3);
+      opts.onChange?.(valueAt(i));
+    }
+  }
+
+  function onScroll() {
+    if (editor) closeEditor(false);
+    markSel(idxFromScroll());
+  }
+
+  function settle() {
+    let i = idxFromScroll();
+    if (opts.loop && (i < n || i >= total - n)) {
+      const j = 2 * n + (i % n);
+      if (curIdx >= 0) items[curIdx].classList.remove("sel");
+      curIdx = -1;
+      el.scrollTop = j * rowH; // instant, invisible: same value, same pixel phase
+      markSel(j, true);
+    } else {
+      markSel(i);
+    }
+  }
+
+  function set(v, smooth) {
+    const clamped = Math.max(opts.min, Math.min(opts.max, v));
+    const snapped = Math.round((clamped - opts.min) / opts.step) * opts.step + opts.min;
+    let i = values.indexOf(snapped);
+    if (opts.loop) i += 2 * n;
+    if (smooth) el.scrollTo({ top: i * rowH, behavior: "smooth" });
+    else el.scrollTop = i * rowH;
+    markSel(i);
+  }
+
+  /* tap selected value -> type it */
+  function openEditor() {
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.inputMode = "numeric";
+    inp.className = "editor";
+    inp.value = get();
+    editor = inp;
+    el.parentElement.appendChild(inp);
+    inp.focus();
+    inp.select();
+    inp.addEventListener("keydown", ev => {
+      if (ev.key === "Enter") closeEditor(true);
+      else if (ev.key === "Escape") closeEditor(false);
+    });
+    inp.addEventListener("blur", () => closeEditor(true));
+  }
+  function closeEditor(commit) {
+    if (!editor) return;
+    const inp = editor;
+    editor = null;
+    const v = parseInt(inp.value, 10);
+    inp.remove();
+    if (commit && Number.isFinite(v)) set(v);
+  }
+
+  el.addEventListener("click", e => {
+    const item = e.target.closest(".item");
+    if (!item) return;
+    const i = Array.prototype.indexOf.call(items, item);
+    if (i === curIdx) openEditor();
+    else el.scrollTo({ top: i * rowH, behavior: "smooth" });
+  });
+
+  el.addEventListener("scroll", onScroll, { passive: true });
+  if ("onscrollend" in el) {
+    el.addEventListener("scrollend", settle);
+  } else {
+    let t;
+    el.addEventListener("scroll", () => { clearTimeout(t); t = setTimeout(settle, 120); }, { passive: true });
+  }
+
+  set(opts.value);
+  return { get, set };
+}
+
+/* ---------- app ---------- */
+let ready = false;
+const app = $("#app"), costEl = $("#cost"), subEl = $("#sub"),
+      cover = $("#cover"), thumb = $("#thumb");
+
+const wheels = {
+  servings: buildWheel($("#w-serv"), { min: 1,  max: 20,   step: 1,  value: 8,   onChange: render }),
+  calories: buildWheel($("#w-cal"),  { min: 20, max: 1000, step: 10, value: 250, onChange: render }),
+  dollars:  buildWheel($("#w-dol"),  { min: 0,  max: 20,   step: 1,  value: 4,   onChange: render }),
+  cents:    buildWheel($("#w-cen"),  { min: 0,  max: 95,   step: 5,  value: 0,   loop: true,
+                                       format: v => String(v).padStart(2, "0"),  onChange: render }),
+};
+
+function render() {
+  if (!ready) return;
+  const s = wheels.servings.get(), c = wheels.calories.get();
+  const d = wheels.dollars.get(),  ce = wheels.cents.get();
+  const cost = costPer2000(s, c, d, ce);
+
+  if (cost === null) {
+    costEl.textContent = "$—";
+    subEl.textContent = "per 2,000 cal";
+    app.dataset.zone = "orange";
+    cover.style.width = "100%";
+    thumb.style.left = "0%";
+    return;
+  }
+
+  const txt = "$" + cost.toFixed(2);
+  costEl.textContent = txt;
+  costEl.classList.toggle("long", txt.length > 7);
+  subEl.textContent = `per 2,000 cal \u00b7 ${(s * c).toLocaleString()} cal per package`;
+
+  app.dataset.zone = cost < 2.5 ? "green" : cost < 8 ? "orange" : "red";
+  const pct = Math.min(cost / 10, 1) * 100;
+  cover.style.width = (100 - pct) + "%";
+  thumb.style.left = pct + "%";
+}
+
+ready = true;
+render();
+
+/* ---------- self test ---------- */
+(function selfTest() {
+  const eq = (a, b) => Math.abs(a - b) < 0.005;
+  const t = {
+    specExample: eq(costPer2000(15, 120, 5, 0), 5.56),   // 2000/1800*5
+    zeroGuard:   costPer2000(0, 120, 5, 0) === null,
+    centsOnly:   eq(costPer2000(1, 20, 0, 5), 5.00),      // 2000/20*0.05
+    overMax:     eq(costPer2000(1, 100, 0, 70), 14.00),   // pegs bar, shows $14.00
+  };
+  const fails = Object.entries(t).filter(([, ok]) => !ok);
+  if (fails.length) console.error("selfTest FAILED:", fails.map(([k]) => k));
+  else console.log("selfTest passed");
+})();
+</script>
+</body>
+</html>
