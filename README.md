@@ -4,7 +4,7 @@
 
 A tiny, mobile-first calculator that turns any food label into one comparable number: dollars per 2,000 calories. Spin the wheels — servings, calories per serving, price — and the score updates instantly.
 
-**Live demo: [foodprice.i12.site](https://foodprice.i12.site/)**
+**Live demo: [b-buller.github.io/food-calorie-score](https://b-buller.github.io/food-calorie-score/)**
 
 <p align="center">
   <img src="screenshot.png" alt="Food Score — wheel pickers for servings, calories, and price with a color-coded cost bar" width="390">
