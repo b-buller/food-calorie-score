@@ -35,9 +35,12 @@
   main {
     max-width: 430px; height: 100%; margin: 0 auto;
     padding: calc(env(safe-area-inset-top) + 1.5rem) 1rem calc(env(safe-area-inset-bottom) + 1rem);
-    display: flex; flex-direction: column; justify-content: center; gap: 1.5rem;
+    display: flex; flex-direction: column; gap: 1.5rem;
     overflow-y: auto;
   }
+  /* center when content fits, scroll cleanly when it doesn't */
+  main > :first-child { margin-top: auto; }
+  main > :last-child { margin-bottom: auto; }
 
   /* ---------- result ---------- */
   .result { text-align: center; }
@@ -118,6 +121,26 @@
   }
   .item.sel { color: var(--text); font-weight: 600; }
 
+  /* ---------- macro section ---------- */
+  .pickers.macro { grid-template-columns: repeat(3, 1fr); }
+  .macro .mresult, .macro .msliders { grid-column: 1 / -1; }
+  .macro .mprice { grid-column: span 2; }
+  .macro .row2 { margin-top: .5rem; }
+  .mresult { text-align: center; margin-bottom: .8rem; }
+  #mcost {
+    font-size: 1.9rem; font-weight: 700; line-height: 1.1;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+    transition: color .15s ease;
+  }
+  .msliders { display: flex; flex-direction: column; gap: .45rem; margin-top: 1rem; padding: 0 .5rem; }
+  .srow {
+    display: flex; align-items: center; gap: .6rem;
+    font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums;
+  }
+  .srow .lab { width: 8rem; flex: none; }
+  .srow .lab b { color: var(--text); font-weight: 600; }
+  .srow input { flex: 1; min-width: 0; accent-color: var(--accent); }
+
   .editor {
     position: absolute; left: 2px; right: 2px; top: 50%; height: var(--row-h);
     transform: translateY(-50%); z-index: 2;
@@ -163,6 +186,43 @@
       </div>
     </div>
   </section>
+
+  <section class="pickers macro">
+    <div class="mresult">
+      <div id="mcost">$—</div>
+      <div class="sub" id="msub">per 2,000 useful cal</div>
+    </div>
+    <div class="col">
+      <label>Protein g</label>
+      <div class="wheelbox"><div class="pill"></div><div class="wheel" id="w-pro"></div></div>
+    </div>
+    <div class="col">
+      <label>Carbs g</label>
+      <div class="wheelbox"><div class="pill"></div><div class="wheel" id="w-carb"></div></div>
+    </div>
+    <div class="col">
+      <label>Fat g</label>
+      <div class="wheelbox"><div class="pill"></div><div class="wheel" id="w-fat"></div></div>
+    </div>
+    <div class="col row2">
+      <label>Servings</label>
+      <div class="wheelbox"><div class="pill"></div><div class="wheel" id="w-mserv"></div></div>
+    </div>
+    <div class="col row2 mprice">
+      <label>Price</label>
+      <div class="pricerow">
+        <span class="sym">$</span>
+        <div class="wheelbox"><div class="pill"></div><div class="wheel" id="w-mdol"></div></div>
+        <span class="sym">.</span>
+        <div class="wheelbox"><div class="pill"></div><div class="wheel" id="w-mcen"></div></div>
+      </div>
+    </div>
+    <div class="msliders">
+      <div class="srow"><span class="lab">Protein <b id="l-p">30%</b> · <span id="g-p">150g</span></span><input type="range" id="s-p" min="0" max="100" step="1" value="30"></div>
+      <div class="srow"><span class="lab">Carbs <b id="l-c">35%</b> · <span id="g-c">175g</span></span><input type="range" id="s-c" min="0" max="100" step="1" value="35"></div>
+      <div class="srow"><span class="lab">Fat <b id="l-f">35%</b> · <span id="g-f">78g</span></span><input type="range" id="s-f" min="0" max="100" step="1" value="35"></div>
+    </div>
+  </section>
 </main>
 
 <script>
@@ -176,6 +236,25 @@ function costPer2000(servings, calories, dollars, cents) {
   const totalCal = servings * calories;
   if (!(totalCal > 0)) return null;
   return 2000 / totalCal * (dollars + cents / 100);
+}
+
+/* Macro score: each macro earns credit up to its proportional share of the
+   daily split (food is X% of 2000 cal -> caps at X% of each macro target).
+   Excess beyond a cap earns nothing. Scale-invariant in servings. */
+function usefulCost(grams, servings, dollars, cents, split) {
+  const pcal = grams.p * 4, ccal = grams.c * 4, fcal = grams.f * 9;
+  const cal = pcal + ccal + fcal;
+  if (!(cal > 0)) return null;
+  const useful =
+    Math.min(pcal, split.p / 100 * cal) +
+    Math.min(ccal, split.c / 100 * cal) +
+    Math.min(fcal, split.f / 100 * cal);
+  if (!(useful * servings > 0)) return null;
+  return {
+    cost: (dollars + cents / 100) * 2000 / (useful * servings),
+    frac: useful / cal,
+    cal,
+  };
 }
 
 /* ---------- wheel ---------- */
@@ -301,12 +380,66 @@ const wheels = {
   servings: buildWheel($("#w-serv"), { min: 1,  max: 500,   step: 1,  value: 8,   onChange: render }),
   calories: buildWheel($("#w-cal"),  { min: 20, max: 10000, step: 10, value: 250, onChange: render }),
   dollars:  buildWheel($("#w-dol"),  { min: 0,  max: 300,   step: 1,  value: 4,   onChange: render }),
-  cents:    buildWheel($("#w-cen"),  { min: 0,  max: 90,   step: 10,  value: 0,   loop: true,
+  cents:    buildWheel($("#w-cen"), { min: 0,  max: 90,   step: 10,  value: 0,   loop: true,
                                        format: v => String(v).padStart(2, "0"),  onChange: render }),
+  protein:  buildWheel($("#w-pro"),  { min: 0, max: 300,   step: 1,  value: 10,  onChange: render }),
+  carbs:    buildWheel($("#w-carb"), { min: 0, max: 300,   step: 1,  value: 30,  onChange: render }),
+  fat:      buildWheel($("#w-fat"),  { min: 0, max: 300,   step: 1,  value: 10,  onChange: render }),
+  mservings: buildWheel($("#w-mserv"), { min: 1, max: 500, step: 1,  value: 8,   onChange: render }),
+  mdollars:  buildWheel($("#w-mdol"),  { min: 0, max: 300, step: 1,  value: 4,   onChange: render }),
+  mcents:    buildWheel($("#w-mcen"),  { min: 0, max: 90,  step: 10, value: 0,   loop: true,
+                                         format: v => String(v).padStart(2, "0"), onChange: render }),
 };
+
+/* ---------- macro split sliders ---------- */
+const split = { p: 30, c: 35, f: 35 };
+const sliders = { p: $("#s-p"), c: $("#s-c"), f: $("#s-f") };
+
+// cyclic compensation: protein <-> carbs <-> fat <-> protein
+const nextOf = { p: "c", c: "f", f: "p" };
+function setSplit(changed, val) {
+  const partner = nextOf[changed];
+  const third = ["p", "c", "f"].find(k => k !== changed && k !== partner);
+  val = Math.max(0, Math.min(100 - split[third], val)); // partner floor: 0
+  split[changed] = val;
+  split[partner] = 100 - val - split[third];
+}
+
+for (const k of ["p", "c", "f"]) {
+  sliders[k].addEventListener("input", () => { setSplit(k, +sliders[k].value); render(); });
+}
 
 function render() {
   if (!ready) return;
+  renderCalorie();
+  renderMacro();
+}
+
+function renderMacro() {
+  const gramsPerCal = { p: 4, c: 4, f: 9 };
+  for (const k of ["p", "c", "f"]) {
+    sliders[k].value = Math.round(split[k]);
+    $("#l-" + k).textContent = Math.round(split[k]) + "%";
+    $("#g-" + k).textContent = Math.round(2000 * split[k] / 100 / gramsPerCal[k]) + "g";
+  }
+
+  const r = usefulCost(
+    { p: wheels.protein.get(), c: wheels.carbs.get(), f: wheels.fat.get() },
+    wheels.mservings.get(), wheels.mdollars.get(), wheels.mcents.get(), split);
+  const mcost = $("#mcost"), msub = $("#msub");
+
+  if (!r) {
+    mcost.textContent = "$—";
+    mcost.style.color = "var(--muted)";
+    msub.textContent = "per 2,000 useful cal";
+    return;
+  }
+  mcost.textContent = "$" + r.cost.toFixed(2);
+  mcost.style.color = r.cost < 2.5 ? "var(--green)" : r.cost < 8 ? "var(--orange)" : "var(--red)";
+  msub.textContent = `per 2,000 useful cal \u00b7 ${Math.round(r.frac * 100)}% useful \u00b7 ${r.cal.toLocaleString()} cal/serving`;
+}
+
+function renderCalorie() {
   const s = wheels.servings.get(), c = wheels.calories.get();
   const d = wheels.dollars.get(),  ce = wheels.cents.get();
   const cost = costPer2000(s, c, d, ce);
@@ -343,6 +476,17 @@ render();
     centsOnly:   eq(costPer2000(1, 20, 0, 5), 5.00),      // 2000/20*0.05
     overMax:     eq(costPer2000(1, 100, 0, 70), 14.00),   // pegs bar, shows $14.00
   };
+  const sp = { p: 30, c: 35, f: 35 };
+  const perfect = usefulCost({ p: 15, c: 17.5, f: 70 / 9 }, 1, 1, 0, sp); // 200 cal, exact split
+  const carbOnly = usefulCost({ p: 0, c: 50, f: 0 }, 1, 1, 0, sp);        // useful = 35%
+  Object.assign(t, {
+    perfectFrac:  eq(perfect.frac, 1),
+    perfectCost:  eq(perfect.cost, 10.00),                 // = costPer2000(1, 200, 1, 0)
+    carbOnlyCost: eq(carbOnly.cost, 2000 / 70),            // $1 / (35% of 200 cal)
+    scaleInvar:   eq(usefulCost({ p: 10, c: 30, f: 10 }, 4, 8, 0, sp).cost,
+                     usefulCost({ p: 10, c: 30, f: 10 }, 1, 2, 0, sp).cost),
+    macroZero:    usefulCost({ p: 0, c: 0, f: 0 }, 1, 1, 0, sp) === null,
+  });
   const fails = Object.entries(t).filter(([, ok]) => !ok);
   if (fails.length) console.error("selfTest FAILED:", fails.map(([k]) => k));
   else console.log("selfTest passed");
